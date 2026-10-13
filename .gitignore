@@ -1,0 +1,35 @@
+# Simulation and synthesis outputs
+*.vcd
+*.fst
+*.wlf
+*.log
+*.jou
+*.pb
+*.rpt
+*.edf
+*.bit
+*.bin
+sim_build/
+build/
+work/
+*.vvp
+
+# Python tooling
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+
+# Generated experiment outputs; commit selected summaries/plots only.
+results/**/raw/
+results/**/generated/
+
+# Local editor and OS files
+.vscode/
+.idea/
+*.swp
+.DS_Store
+Thumbs.db
+
+
