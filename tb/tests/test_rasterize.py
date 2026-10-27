@@ -1,6 +1,6 @@
 import unittest
 
-from model import Config, Triangle, Vertex, rasterize_triangle
+from model import Config, Triangle, Vertex, rasterize_triangle, setup_triangle
 
 
 class RasterizeTests(unittest.TestCase):
@@ -62,6 +62,17 @@ class RasterizeTests(unittest.TestCase):
         self.assertTrue(pixels)
         self.assertTrue(all(0 <= p.x < self.config.width for p in pixels))
         self.assertTrue(all(0 <= p.y < self.config.height for p in pixels))
+
+    def test_setup_exposes_bounds_and_equivalent_edge_equations(self) -> None:
+        triangle = Triangle(self.vertex(1, 1), self.vertex(5, 1), self.vertex(1, 5))
+
+        setup = setup_triangle(triangle, self.config)
+
+        self.assertIsNotNone(setup)
+        assert setup is not None
+        self.assertEqual((setup.x_min, setup.x_max, setup.y_min, setup.y_max), (1, 4, 1, 4))
+        self.assertEqual(setup.area, 4096)
+        self.assertEqual([edge.evaluate(24, 24) for edge in setup.edges], [512, 3072, 512])
 
 
 if __name__ == "__main__":

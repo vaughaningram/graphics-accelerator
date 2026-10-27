@@ -67,3 +67,27 @@ class Pixel:
     y: int
     primitive_id: int = 0
 
+
+@dataclass(frozen=True)
+class EdgeEquation:
+    """Integer edge equation E(x, y) = a*x + b*y + c."""
+
+    a: int
+    b: int
+    c: int
+    top_left: bool
+
+    def evaluate(self, x: int, y: int) -> int:
+        return self.a * x + self.b * y + self.c
+
+
+@dataclass(frozen=True)
+class SetupResult:
+    triangle: Triangle
+    area: int
+    x_min: int
+    x_max: int
+    y_min: int
+    y_max: int
+    edges: Tuple[EdgeEquation, EdgeEquation, EdgeEquation]
+
