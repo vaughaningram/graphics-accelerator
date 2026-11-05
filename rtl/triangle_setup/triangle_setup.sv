@@ -10,7 +10,8 @@ module triangle_setup #(
     parameter int PRIMITIVE_ID_WIDTH = 8,
     parameter int COORD_FRAC_BITS = 4,
     parameter int FRAMEBUFFER_WIDTH = 64,
-    parameter int FRAMEBUFFER_HEIGHT = 64
+    parameter int FRAMEBUFFER_HEIGHT = 64,
+    parameter int EDGE_WIDTH = 2*COORD_WIDTH + 2
 ) (
     input  logic clk,
     input  logic rst_n,
@@ -39,7 +40,17 @@ module triangle_setup #(
     output logic signed [COORD_WIDTH-1:0] out_x_min,
     output logic signed [COORD_WIDTH-1:0] out_x_max,
     output logic signed [COORD_WIDTH-1:0] out_y_min,
-    output logic signed [COORD_WIDTH-1:0] out_y_max
+    output logic signed [COORD_WIDTH-1:0] out_y_max,
+    output logic signed [COORD_WIDTH:0] out_edge_a0,
+    output logic signed [COORD_WIDTH:0] out_edge_b0,
+    output logic signed [EDGE_WIDTH-1:0] out_edge_c0,
+    output logic signed [COORD_WIDTH:0] out_edge_a1,
+    output logic signed [COORD_WIDTH:0] out_edge_b1,
+    output logic signed [EDGE_WIDTH-1:0] out_edge_c1,
+    output logic signed [COORD_WIDTH:0] out_edge_a2,
+    output logic signed [COORD_WIDTH:0] out_edge_b2,
+    output logic signed [EDGE_WIDTH-1:0] out_edge_c2,
+    output logic [2:0] out_top_left
 );
 
     localparam int AREA_WIDTH = 2*COORD_WIDTH + 2;
@@ -64,6 +75,28 @@ module triangle_setup #(
     logic signed [COORD_WIDTH-1:0] x_max_calc;
     logic signed [COORD_WIDTH-1:0] y_min_calc;
     logic signed [COORD_WIDTH-1:0] y_max_calc;
+    logic signed [COORD_WIDTH-1:0] normalized_x0;
+    logic signed [COORD_WIDTH-1:0] normalized_y0;
+    logic signed [COORD_WIDTH-1:0] normalized_x1;
+    logic signed [COORD_WIDTH-1:0] normalized_y1;
+    logic signed [COORD_WIDTH-1:0] normalized_x2;
+    logic signed [COORD_WIDTH-1:0] normalized_y2;
+    logic signed [COORD_WIDTH:0] edge_dx0;
+    logic signed [COORD_WIDTH:0] edge_dy0;
+    logic signed [COORD_WIDTH:0] edge_dx1;
+    logic signed [COORD_WIDTH:0] edge_dy1;
+    logic signed [COORD_WIDTH:0] edge_dx2;
+    logic signed [COORD_WIDTH:0] edge_dy2;
+    logic signed [EDGE_WIDTH-1:0] edge_c0_calc;
+    logic signed [EDGE_WIDTH-1:0] edge_c1_calc;
+    logic signed [EDGE_WIDTH-1:0] edge_c2_calc;
+    logic signed [EDGE_WIDTH-1:0] edge_c0_term_a;
+    logic signed [EDGE_WIDTH-1:0] edge_c0_term_b;
+    logic signed [EDGE_WIDTH-1:0] edge_c1_term_a;
+    logic signed [EDGE_WIDTH-1:0] edge_c1_term_b;
+    logic signed [EDGE_WIDTH-1:0] edge_c2_term_a;
+    logic signed [EDGE_WIDTH-1:0] edge_c2_term_b;
+    logic [2:0] top_left_calc;
 
     function automatic logic signed [COORD_WIDTH-1:0] clamp_x(
         input logic signed [COORD_WIDTH+1:0] value
@@ -122,6 +155,44 @@ module triangle_setup #(
         x_max_calc = clamp_x(max_x_adjusted >>> COORD_FRAC_BITS);
         y_min_calc = clamp_y(min_y_adjusted >>> COORD_FRAC_BITS);
         y_max_calc = clamp_y(max_y_adjusted >>> COORD_FRAC_BITS);
+
+        normalized_x0 = in_x0;
+        normalized_y0 = in_y0;
+        if (area_calc < 0) begin
+            normalized_x1 = in_x2;
+            normalized_y1 = in_y2;
+            normalized_x2 = in_x1;
+            normalized_y2 = in_y1;
+        end else begin
+            normalized_x1 = in_x1;
+            normalized_y1 = in_y1;
+            normalized_x2 = in_x2;
+            normalized_y2 = in_y2;
+        end
+
+        edge_dx0 = $signed(normalized_x1) - $signed(normalized_x0);
+        edge_dy0 = $signed(normalized_y1) - $signed(normalized_y0);
+        edge_dx1 = $signed(normalized_x2) - $signed(normalized_x1);
+        edge_dy1 = $signed(normalized_y2) - $signed(normalized_y1);
+        edge_dx2 = $signed(normalized_x0) - $signed(normalized_x2);
+        edge_dy2 = $signed(normalized_y0) - $signed(normalized_y2);
+
+        edge_c0_term_a = $signed(edge_dy0) * $signed(normalized_x0);
+        edge_c0_term_b = $signed(edge_dx0) * $signed(normalized_y0);
+        edge_c1_term_a = $signed(edge_dy1) * $signed(normalized_x1);
+        edge_c1_term_b = $signed(edge_dx1) * $signed(normalized_y1);
+        edge_c2_term_a = $signed(edge_dy2) * $signed(normalized_x2);
+        edge_c2_term_b = $signed(edge_dx2) * $signed(normalized_y2);
+        edge_c0_calc = edge_c0_term_a - edge_c0_term_b;
+        edge_c1_calc = edge_c1_term_a - edge_c1_term_b;
+        edge_c2_calc = edge_c2_term_a - edge_c2_term_b;
+
+        top_left_calc[0] = (edge_dy0 < 0) ||
+                           ((edge_dy0 == 0) && (edge_dx0 > 0));
+        top_left_calc[1] = (edge_dy1 < 0) ||
+                           ((edge_dy1 == 0) && (edge_dx1 > 0));
+        top_left_calc[2] = (edge_dy2 < 0) ||
+                           ((edge_dy2 == 0) && (edge_dx2 > 0));
     end
 
     always_ff @(posedge clk or negedge rst_n) begin
@@ -140,6 +211,16 @@ module triangle_setup #(
             out_x_max <= '0;
             out_y_min <= '0;
             out_y_max <= '0;
+            out_edge_a0 <= '0;
+            out_edge_b0 <= '0;
+            out_edge_c0 <= '0;
+            out_edge_a1 <= '0;
+            out_edge_b1 <= '0;
+            out_edge_c1 <= '0;
+            out_edge_a2 <= '0;
+            out_edge_b2 <= '0;
+            out_edge_c2 <= '0;
+            out_top_left <= '0;
         end else if (in_valid && in_ready) begin
             out_valid <= 1'b1;
             out_x0 <= in_x0;
@@ -151,6 +232,16 @@ module triangle_setup #(
             out_x_max <= x_max_calc;
             out_y_min <= y_min_calc;
             out_y_max <= y_max_calc;
+            out_edge_a0 <= -edge_dy0;
+            out_edge_b0 <= edge_dx0;
+            out_edge_c0 <= edge_c0_calc;
+            out_edge_a1 <= -edge_dy1;
+            out_edge_b1 <= edge_dx1;
+            out_edge_c1 <= edge_c1_calc;
+            out_edge_a2 <= -edge_dy2;
+            out_edge_b2 <= edge_dx2;
+            out_edge_c2 <= edge_c2_calc;
+            out_top_left <= top_left_calc;
 
             if (area_calc < 0) begin
                 out_x1 <= in_x2;
@@ -169,4 +260,5 @@ module triangle_setup #(
     end
 
 endmodule
+
 
