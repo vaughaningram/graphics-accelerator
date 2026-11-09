@@ -13,8 +13,8 @@ interpolation, depth testing, framebuffer behavior, and a measured
 architecture optimization.
 
 > **Current status — Geometry RTL beta**
-> Triangle setup and rasterizer stages are implemented. The next integration
-> step is the top-level triangle-to-pixel path and its SystemVerilog simulation.
+> The triangle setup, rasterizer, and top-level triangle-to-pixel path are
+> implemented. SystemVerilog simulation and broader verification are next.
 
 ## Project scope
 
@@ -58,9 +58,9 @@ Depth test / framebuffer
 Pixel output
 ```
 
-The first working slice stops after rasterization. This gives the team a small,
-complete geometry path that can be integrated and verified before adding the
-state and arithmetic of later stages.
+The first working slice stops after rasterization. That geometry path is now
+integrated in RTL and provides a complete triangle-in, covered-pixel-out
+interface before the state and arithmetic of later stages are added.
 
 ### Triangle setup
 
@@ -90,7 +90,7 @@ on establishing the triangle-to-pixel contract first.
 
 ## Design contract
 
-The initial prototype uses a deliberately small and reproducible configuration:
+The initial prototype uses a deliberately bounded and reproducible configuration:
 
 | Parameter | Initial choice |
 | --- | --- |
@@ -218,7 +218,7 @@ results/
 ## Development path
 
 1. Freeze the triangle and pixel interface contract.
-2. Integrate the triangle setup and rasterizer into the first RTL beta.
+2. Verify the integrated triangle-to-pixel RTL slice.
 3. Compare the RTL pixel stream against the independent model.
 4. Add interpolation and depth behavior.
 5. Exercise randomized stalls, assertions, and broader regression.
@@ -239,9 +239,10 @@ From the repository root, run the Python coverage regression with:
 python -m unittest discover -s tb/tests -v
 ```
 
-The SystemVerilog flow is being brought up alongside the RTL beta. The target
-verification flow will compile the design, drive triangle transactions, apply
-backpressure, and compare the emitted pixel sequence against the Python model.
+The integrated SystemVerilog geometry slice is implemented, but its simulation
+and testbench flow are still being brought up. The target verification flow
+will compile the design, drive triangle transactions, apply backpressure, and
+compare the emitted pixel sequence against the Python model.
 
 ## Project context
 
