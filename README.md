@@ -1,68 +1,38 @@
 # Graphics Accelerator
 
-An independent senior capstone project developing a small, synthesizable,
-fixed-function graphics accelerator in SystemVerilog.
+**AMD-sponsored senior capstone · SystemVerilog · Python · RTL verification · performance analysis**
 
-The project is being developed by Vaughan Ingram, Daniel Jarka, and Romil Shah
-with AMD sponsorship. Its purpose is not to recreate a commercial GPU. Instead,
-we are using a bounded graphics datapath to study the parts of accelerator
-engineering that are easy to describe but difficult to get right in hardware:
-numeric representation, pipeline control, variable-rate work, verification,
-measurement, and architecture-level tradeoffs.
+Graphics Accelerator is a three-person hardware design project led by Vaughan
+Ingram with Daniel Jarka and Romil Shah. The team is building a small,
+synthesizable, fixed-function graphics pipeline as an independent academic
+prototype.
 
-## Project in one sentence
+The design begins with a focused geometry datapath: it accepts screen-space
+triangles, determines their covered pixels, and emits those pixels through a
+streaming RTL interface. The pipeline will then grow to include fixed-point
+attribute interpolation, depth testing, framebuffer behavior, and a measured
+architecture optimization.
 
-The accelerator accepts fixed-point triangles, determines which pixels they
-cover, processes those pixel fragments through a hardware pipeline, and emits a
-deterministic pixel stream or framebuffer result.
+> **Current status — Geometry RTL beta**
+> Triangle setup and rasterizer stages are implemented. The next integration
+> step is the top-level triangle-to-pixel path and its SystemVerilog simulation.
 
-## Why this project
+## At a glance
 
-Graphics is a useful vehicle for a serious hardware design project because one
-triangle creates a variable amount of work. A small triangle may produce only a
-few fragments; a large triangle may produce hundreds. Downstream stages can
-also run at different rates, which makes buffering, backpressure, ordering, and
-memory behavior central design concerns.
+| Area | Project direction |
+| --- | --- |
+| Hardware | Synthesizable SystemVerilog RTL |
+| Graphics function | Fixed-function triangle processing |
+| Initial datapath | Triangle input → setup → rasterization → pixel stream |
+| Numeric representation | Signed fixed-point screen coordinates |
+| Control model | Ready/valid streaming with backpressure |
+| Reference behavior | Independent Python model |
+| End goal | Verified baseline, measured bottleneck, and architecture-level optimization |
 
-The project follows a measured engineering loop:
+## Architecture
 
-```text
-Specify → design → implement → verify → measure → optimize → re-verify
-```
-
-The final result should demonstrate not only that the hardware produces the
-right pixels, but also why the architecture behaves the way it does and what
-changes improve it.
-
-## Current milestone: geometry RTL beta
-
-The current implementation is focused on the first complete geometry slice:
-
-```text
-Triangle input
-      │
-      ▼
-Triangle setup
-      │
-      ▼
-Rasterization
-      │
-      ▼
-Covered-pixel stream
-```
-
-This slice establishes the core triangle-to-pixel behavior before adding color
-and depth processing. The repository currently contains the setup and
-rasterizer building blocks, along with the independent Python behavior model
-used to define expected coverage.
-
-The immediate RTL integration goal is a clean top-level path that accepts one
-triangle transaction and emits the same covered-pixel sequence predicted by the
-reference model.
-
-## Architecture overview
-
-The planned baseline pipeline is:
+The planned baseline pipeline is organized as a sequence of explicit hardware
+stages:
 
 ```text
 Triangle input
@@ -89,143 +59,149 @@ Depth test / framebuffer
 Pixel output
 ```
 
-Each stage has a focused responsibility and communicates through an explicit
-streaming interface. That makes it possible to test stages independently,
-inject stalls, and later change one part of the architecture without hiding
-the effects in a monolithic block.
+The first working slice stops after rasterization. This gives the team a small,
+complete geometry path that can be integrated and verified before adding the
+state and arithmetic of later stages.
 
 ### Triangle setup
 
-Triangle setup performs the work that is constant for every pixel of a
-triangle. It computes the signed doubled area, identifies degenerate geometry,
-normalizes winding, and calculates the candidate pixel bounds.
+Setup handles the work that does not need to be repeated independently for
+every candidate pixel. It computes the signed doubled area, identifies
+degenerate triangles, normalizes winding, and calculates the clipped candidate
+region.
 
-It then converts the triangle edges into integer equations of the form:
+For each normalized edge, setup produces an integer equation:
 
 ```text
 E(x, y) = A·x + B·y + C
 ```
 
-The sign of each edge equation at a pixel center determines whether the sample
-is inside the triangle. Setup also produces top-left-rule metadata so adjacent
-triangles share boundaries deterministically without cracks or double-owned
-pixels.
+Evaluating the three equations at a pixel center determines whether that sample
+belongs to the triangle. Setup also produces the metadata required by the
+top-left fill rule, giving adjacent triangles deterministic ownership of shared
+boundaries.
 
 ### Rasterization
 
-The baseline rasterizer scans the clipped bounding box in row-major order. For
-each candidate pixel, it evaluates the three edge equations and emits a pixel
-only when the coverage rules pass.
+The baseline rasterizer scans the setup region in row-major order. It evaluates
+the edge equations for each candidate pixel and emits only covered samples.
 
-This is intentionally a simple baseline. It makes the work and its cost easy
-to observe, giving us a clear reference point for later experiments such as
-parallel coverage lanes, improved scan traversal, or deeper arithmetic
-pipelining.
+This deliberately straightforward implementation is useful as a baseline: its
+work is visible, its ordering is deterministic, and its throughput limits can
+be measured before considering parallel coverage lanes or other optimizations.
 
-### Future fragment processing
+### Later stages
 
-Once geometry coverage is integrated and verified, the pipeline will be
-extended with fixed-point interpolation for attributes such as depth and color.
-The depth stage will compare fragments against stored depth values and control
-which pixels reach the final output.
+After the geometry path is integrated, the pipeline will evaluate depth and
+color at each covered sample. A depth stage will compare each fragment with the
+stored depth value and control whether the fragment reaches the output.
 
-These stages are planned work, not claims about a finished commercial GPU.
+Those stages are part of the target architecture; the current beta is focused
+on establishing the triangle-to-pixel contract first.
 
-## Current numerical contract
+## Design contract
 
-The initial beta uses a small, deterministic configuration:
+The initial prototype uses a deliberately small and reproducible configuration:
 
-| Item | Current choice |
+| Parameter | Initial choice |
 | --- | --- |
 | Screen coordinates | Signed 16-bit fixed point |
-| Coordinate format | Q12.4 by default |
-| Coordinate scale | 16 coordinate units per screen pixel |
-| Simulation framebuffer | 64 × 64 pixels |
+| Coordinate format | Q12.4 |
+| Coordinate scale | 16 units per screen pixel |
+| Simulation bounds | 64 × 64 pixels |
 | Primitive ID | 8 bits |
-| Pixel sampling | Pixel centers |
-| Triangle convention | Winding normalization plus top-left rule |
+| Pixel sample location | Pixel centers |
+| Triangle convention | Winding normalization and top-left rule |
 | Candidate traversal | Row-major |
 | Degenerate triangles | No covered-pixel output |
 
-These are explicit engineering choices for a reproducible prototype. They are
-not intended to represent proprietary AMD, NVIDIA, Apple, or Meta hardware.
+These values define the starting engineering contract. They are choices for a
+bounded educational prototype, not claims about the implementation of AMD,
+NVIDIA, Apple, Meta, or any other commercial GPU.
 
-## Flow control
+## Streaming and backpressure
 
-The design uses ready/valid streaming interfaces at stage boundaries.
-
-A transaction transfers only when both sides agree:
+The stages communicate with ready/valid interfaces. A transaction transfers
+only when both signals are asserted:
 
 ```text
 transfer = valid && ready
 ```
 
-When a downstream stage is unable to accept data, the upstream stage holds its
-valid bit and transaction fields stable. This allows the design to handle
-backpressure without dropping, duplicating, or reordering work.
+If a downstream stage cannot accept a transaction, the upstream stage holds its
+valid bit and data stable. This makes stalls explicit and lets the verification
+environment test whether work is preserved across backpressure.
 
 The rasterizer is stateful because one triangle can produce a variable number
-of pixels. Its scan position and output data must remain correct across both
-normal progress and arbitrary downstream stalls.
+of pixels. Its scan coordinates, edge state, and output transaction must remain
+consistent while the pipeline advances normally or waits on a stalled consumer.
 
-## Verification strategy
+## Verification
 
-The Python model serves as an independent behavioral specification. It defines
-the expected geometric result without copying the RTL's control structure.
+The Python model is an independent behavioral specification for the geometry
+rules. It defines expected coverage without reproducing the RTL state machine,
+which gives the hardware an external reference for comparison.
 
-The verification plan includes:
+The verification environment is being developed around:
 
-- Directed triangles with known expected coverage
+- Directed triangles with known expected pixel coverage
 - Reversed winding and degenerate geometry
-- Off-screen and framebuffer-boundary cases
+- Off-screen geometry and framebuffer boundaries
 - Shared-edge tests for the top-left rule
 - Fixed-point and pixel-center boundary cases
 - RTL-to-model output comparison
-- Randomized triangle workloads
+- Randomized triangles and primitive sequences
 - Randomized downstream stalls and backpressure
-- Assertions for ready/valid stability and transaction ordering
-- Checks for lost, duplicated, or reordered pixel transactions
+- Assertions for ready/valid stability and ordering
+- Conservation checks for lost, duplicated, or reordered transactions
 
-The goal is to prove the protocol and numerical behavior, not just inspect
-whether one rendered image appears visually plausible.
+The objective is to verify both numerical behavior and protocol behavior. A
+single plausible-looking image is not sufficient evidence for a design that
+must also behave correctly under stalls, boundary conditions, and different
+workload shapes.
 
-## Performance and architecture study
+## Performance study
 
-After the baseline is correct, the team will characterize it using controlled
-workloads. Candidate workload classes include:
+Once the baseline path is correct, the team will measure how work and waiting
+are distributed across the pipeline. Planned counters include:
 
-- Small triangles that emphasize setup overhead
-- Large triangles that stress rasterization throughput
-- Sparse triangles that expose candidate-pixel work
-- Overlapping triangles that stress depth behavior
-- Bursty input that exercises buffering
-- Artificial output stalls that expose backpressure effects
+- Triangles accepted
+- Candidate pixels evaluated
+- Covered pixels generated
+- Output pixels retired
+- Active and stalled cycles
+- Backpressure events
+- Stage utilization
+- Buffer occupancy
+- End-to-end latency and sustained throughput
 
-Instrumentation will distinguish useful work from waiting. Planned measurements
-include triangle throughput, fragment throughput, latency, stage activity,
-stall cycles, backpressure events, and buffer occupancy.
+Controlled workloads will isolate different behaviors. Small triangles expose
+setup overhead, large triangles stress rasterization throughput, overlapping
+triangles exercise depth behavior, and bursty or artificially stalled traffic
+tests buffering and flow control.
 
-The optimization will be selected from measured evidence. Depending on the
-bottleneck, it could involve additional rasterization lanes, deeper buffering,
-reduced arithmetic serialization, improved scan localization, or a deeper
-pipeline around a critical timing path. The final comparison will include both
-performance improvement and hardware cost.
+The optimization will be chosen from those measurements rather than assumed in
+advance. Depending on the observed bottleneck, the experiment may evaluate
+parallel rasterization lanes, deeper buffering, arithmetic pipelining, or a
+more efficient scan strategy. The result will be compared against the same
+baseline workloads using performance, timing, and hardware-cost evidence.
 
-## Scope boundary
+## Scope
 
-The initial project intentionally excludes:
+The project intentionally focuses on a bounded fixed-function datapath. The
+initial scope does not include:
 
 - Programmable shaders
-- Texture sampling and filtering
+- Texture sampling or filtering
 - Graphics APIs and drivers
 - A commercial GPU instruction set
-- Large cache hierarchies and a general-purpose memory system
-- Reproduction of proprietary AMD or other vendor architecture
+- Large cache hierarchies or a general-purpose memory system
+- Reproduction of proprietary vendor architecture
 
-This boundary keeps the project focused on datapath design, verification, and
-measurable microarchitectural decisions.
+Keeping this boundary fixed allows the team to go deeper on RTL design,
+verification, and measured microarchitectural tradeoffs.
 
-## Repository layout
+## Repository structure
 
 ```text
 docs/
@@ -250,35 +226,40 @@ results/
   Curated measurements, plots, and baseline-versus-optimized evidence
 ```
 
-## Development milestones
+## Development path
 
 1. Freeze the triangle and pixel interface contract.
-2. Complete and verify the triangle-to-pixel RTL beta.
-3. Add interpolation and depth behavior to the model and RTL.
-4. Integrate end-to-end verification with randomized stalls.
-5. Characterize the baseline across controlled workloads.
-6. Choose and implement one measured architectural optimization.
-7. Re-run correctness, performance, and synthesis comparisons.
-8. Document the final design, tradeoffs, limitations, and evidence.
+2. Integrate the triangle setup and rasterizer into the first RTL beta.
+3. Compare the RTL pixel stream against the independent model.
+4. Add interpolation and depth behavior.
+5. Exercise randomized stalls, assertions, and broader regression.
+6. Characterize the baseline across controlled workloads.
+7. Implement one optimization supported by measured evidence.
+8. Re-run correctness, performance, and synthesis comparisons.
 
-## Running the current Python checks
+The final deliverable is intended to show the complete engineering loop:
+architecture definition, synthesizable implementation, independent
+verification, performance characterization, and a documented optimization
+tradeoff.
 
-From the repository root:
+## Current checks
+
+From the repository root, run the Python coverage regression with:
 
 ```powershell
 python -m unittest discover -s tb/tests -v
 ```
 
-The RTL beta is being brought up incrementally as the SystemVerilog tool flow
-is finalized. RTL changes are intended to be checked against the independent
-model rather than treated as correct solely because they compile.
+The SystemVerilog flow is being brought up alongside the RTL beta. The target
+verification flow will compile the design, drive triangle transactions, apply
+backpressure, and compare the emitted pixel sequence against the Python model.
 
 ## Team
 
-- Vaughan Ingram — technical lead; architecture, RTL, integration, and sponsor communication
-- Daniel Jarka — performance analysis, instrumentation, and verification
-- Romil Shah — project execution, tooling, documentation, and integration
+- **Vaughan Ingram** — technical lead; architecture, RTL, integration, and sponsor communication
+- **Daniel Jarka** — performance analysis, instrumentation, and verification
+- **Romil Shah** — project execution, tooling, documentation, and integration
 
-All major design decisions, verification evidence, and performance claims are
-intended to be reproducible from the repository.
+The repository is intended to make design decisions, verification evidence, and
+performance claims reproducible for teammates, reviewers, and technical readers.
 
