@@ -90,7 +90,7 @@ on establishing the triangle-to-pixel contract first.
 
 ## Design contract
 
-The initial prototype uses a deliberately small and reproducible configuration:
+The initial prototype uses a deliberately bounded and reproducible configuration:
 
 | Parameter | Initial choice |
 | --- | --- |
