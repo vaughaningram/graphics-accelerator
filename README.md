@@ -1,25 +1,24 @@
-# Graphics Accelerator
+# Pipelined Graphics Accelerator
 
-**AMD-sponsored senior capstone · SystemVerilog · Python · RTL verification · performance analysis**
+**RTL design, verification, and performance characterization**
 
-Graphics Accelerator is a three-person hardware design project led by Vaughan
-Ingram with Daniel Jarka and Romil Shah. The team is building a small,
-synthesizable, fixed-function graphics pipeline as an independent academic
-prototype.
+This repository contains the implementation and evaluation of a synthesizable,
+fixed-function graphics pipeline developed for a senior capstone project and
+sponsored by AMD.
 
-The design begins with a focused geometry datapath: it accepts screen-space
-triangles, determines their covered pixels, and emits those pixels through a
-streaming RTL interface. The pipeline will then grow to include fixed-point
-attribute interpolation, depth testing, framebuffer behavior, and a measured
+The design begins with a geometry datapath that accepts screen-space triangles,
+determines their covered pixels, and emits those pixels through a streaming RTL
+interface. The complete design will extend this path with fixed-point attribute
+interpolation, depth testing, framebuffer behavior, and a measured
 architecture optimization.
 
 > **Current status — Geometry RTL beta**
 > Triangle setup and rasterizer stages are implemented. The next integration
 > step is the top-level triangle-to-pixel path and its SystemVerilog simulation.
 
-## At a glance
+## Project scope
 
-| Area | Project direction |
+| Area | Design direction |
 | --- | --- |
 | Hardware | Synthesizable SystemVerilog RTL |
 | Graphics function | Fixed-function triangle processing |
@@ -40,7 +39,7 @@ Triangle input
       ▼
 Triangle setup
   area, winding, bounds,
-  edge equations
+  coverage metadata
       │
       ▼
 Rasterizer
@@ -66,25 +65,15 @@ state and arithmetic of later stages.
 ### Triangle setup
 
 Setup handles the work that does not need to be repeated independently for
-every candidate pixel. It computes the signed doubled area, identifies
-degenerate triangles, normalizes winding, and calculates the clipped candidate
-region.
-
-For each normalized edge, setup produces an integer equation:
-
-```text
-E(x, y) = A·x + B·y + C
-```
-
-Evaluating the three equations at a pixel center determines whether that sample
-belongs to the triangle. Setup also produces the metadata required by the
-top-left fill rule, giving adjacent triangles deterministic ownership of shared
-boundaries.
+every candidate pixel. It identifies degenerate triangles, normalizes their
+orientation, calculates the clipped candidate region, and prepares the
+coverage data used by the rasterizer.
 
 ### Rasterization
 
-The baseline rasterizer scans the setup region in row-major order. It evaluates
-the edge equations for each candidate pixel and emits only covered samples.
+The baseline rasterizer scans the setup region in row-major order. It applies
+the documented triangle-coverage rules to each candidate pixel and emits only
+covered samples.
 
 This deliberately straightforward implementation is useful as a baseline: its
 work is visible, its ordering is deterministic, and its throughput limits can
@@ -111,7 +100,7 @@ The initial prototype uses a deliberately small and reproducible configuration:
 | Simulation bounds | 64 × 64 pixels |
 | Primitive ID | 8 bits |
 | Pixel sample location | Pixel centers |
-| Triangle convention | Winding normalization and top-left rule |
+| Triangle convention | Deterministic shared-edge coverage |
 | Candidate traversal | Row-major |
 | Degenerate triangles | No covered-pixel output |
 
@@ -133,7 +122,7 @@ valid bit and data stable. This makes stalls explicit and lets the verification
 environment test whether work is preserved across backpressure.
 
 The rasterizer is stateful because one triangle can produce a variable number
-of pixels. Its scan coordinates, edge state, and output transaction must remain
+of pixels. Its scan position, triangle state, and output transaction must remain
 consistent while the pipeline advances normally or waits on a stalled consumer.
 
 ## Verification
@@ -147,7 +136,7 @@ The verification environment is being developed around:
 - Directed triangles with known expected pixel coverage
 - Reversed winding and degenerate geometry
 - Off-screen geometry and framebuffer boundaries
-- Shared-edge tests for the top-left rule
+- Shared-edge tests for deterministic ownership
 - Fixed-point and pixel-center boundary cases
 - RTL-to-model output comparison
 - Randomized triangles and primitive sequences
@@ -254,12 +243,9 @@ The SystemVerilog flow is being brought up alongside the RTL beta. The target
 verification flow will compile the design, drive triangle transactions, apply
 backpressure, and compare the emitted pixel sequence against the Python model.
 
-## Team
+## Project context
 
-- **Vaughan Ingram** — technical lead; architecture, RTL, integration, and sponsor communication
-- **Daniel Jarka** — performance analysis, instrumentation, and verification
-- **Romil Shah** — project execution, tooling, documentation, and integration
-
-The repository is intended to make design decisions, verification evidence, and
-performance claims reproducible for teammates, reviewers, and technical readers.
+This is an independent academic hardware project. The repository is intended to
+make the design decisions, verification evidence, and performance claims
+reproducible for technical reviewers and future users of the work.
 
