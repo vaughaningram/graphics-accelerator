@@ -122,7 +122,7 @@ module triangle_setup #(
 
     assign in_ready = ~out_valid | out_ready;
 
-    always_comb begin
+    always @* begin
         dx01 = $signed(in_x1) - $signed(in_x0);
         dy01 = $signed(in_y1) - $signed(in_y0);
         dx02 = $signed(in_x2) - $signed(in_x0);
@@ -195,7 +195,7 @@ module triangle_setup #(
                            ((edge_dy2 == 0) && (edge_dx2 > 0));
     end
 
-    always_ff @(posedge clk or negedge rst_n) begin
+    always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             out_valid <= 1'b0;
             out_x0 <= '0;
