@@ -14,7 +14,8 @@ architecture optimization.
 
 > **Current status — Geometry RTL beta**
 > The triangle setup, rasterizer, and top-level triangle-to-pixel path are
-> implemented. SystemVerilog simulation and broader verification are next.
+> implemented and smoke-tested with Icarus Verilog. Broader verification and
+> RTL-to-model comparison are next.
 
 ## Project scope
 
@@ -239,10 +240,23 @@ From the repository root, run the Python coverage regression with:
 python -m unittest discover -s tb/tests -v
 ```
 
-The integrated SystemVerilog geometry slice is implemented, but its simulation
-and testbench flow are still being brought up. The target verification flow
-will compile the design, drive triangle transactions, apply backpressure, and
-compare the emitted pixel sequence against the Python model.
+The integrated SystemVerilog geometry slice can be compiled and smoke-tested
+with Icarus Verilog:
+
+```powershell
+New-Item -ItemType Directory -Force .sim_tmp
+iverilog -g2012 -s geometry_smoke_tb -o .sim_tmp/geometry_smoke.vvp `
+  rtl/triangle_setup/triangle_setup.sv `
+  rtl/rasterizer/rasterizer.sv `
+  rtl/graphics_accelerator/graphics_accelerator.sv `
+  tb/rtl/geometry_smoke_tb.sv
+vvp .sim_tmp/geometry_smoke.vvp
+```
+
+The smoke test drives a known triangle, checks the expected covered-pixel
+sequence, and applies output backpressure. The target verification flow will
+extend this with randomized triangles, broader stall patterns, assertions, and
+RTL-to-model comparison.
 
 ## Project context
 
