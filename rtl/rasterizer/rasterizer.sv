@@ -73,7 +73,7 @@ module rasterizer #(
 
     assign setup_ready = (state == IDLE);
 
-    always_comb begin
+    always @* begin
         pixel_center_x = (scan_x <<< COORD_FRAC_BITS) +
                          (1 <<< (COORD_FRAC_BITS - 1));
         pixel_center_y = (scan_y <<< COORD_FRAC_BITS) +
@@ -96,7 +96,7 @@ module rasterizer #(
         last_pixel = last_in_row && (scan_y == y_max_reg);
     end
 
-    always_ff @(posedge clk or negedge rst_n) begin
+    always @(posedge clk or negedge rst_n) begin
         if (!rst_n) begin
             state <= IDLE;
             pixel_valid <= 1'b0;
@@ -186,4 +186,5 @@ module rasterizer #(
     end
 
 endmodule
+
 
