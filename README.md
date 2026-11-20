@@ -6,16 +6,17 @@ This repository contains the implementation and evaluation of a synthesizable,
 fixed-function graphics pipeline developed for a senior capstone project and
 sponsored by AMD.
 
-The design begins with a geometry datapath that accepts screen-space triangles,
-determines their covered pixels, and emits those pixels through a streaming RTL
-interface. The complete design will extend this path with fixed-point attribute
-interpolation, depth testing, framebuffer behavior, and a measured
-architecture optimization.
+The current beta accepts screen-space triangles with vertex color and depth,
+determines covered pixels, interpolates those attributes, and emits fragments
+that pass a small depth buffer. The project continues with broader verification
+and measured architecture work.
 
-> **Current status — Geometry RTL beta**
-> The triangle setup, rasterizer, and top-level triangle-to-pixel path are
-> implemented and smoke-tested with Icarus Verilog. Broader verification and
-> RTL-to-model comparison are next.
+> **Current status — Limited-scope pixel pipeline**
+> The RTL accepts screen-space triangles with per-vertex color and depth,
+> rasterizes covered pixels, interpolates attributes, and emits pixels that
+> pass a 64 × 64 depth test. A simulation demo produces frames from that output.
+> Broader self-checking verification and performance characterization remain
+> in progress.
 
 ## Project scope
 
@@ -23,7 +24,7 @@ architecture optimization.
 | --- | --- |
 | Hardware | Synthesizable SystemVerilog RTL |
 | Graphics function | Fixed-function triangle processing |
-| Initial datapath | Triangle input → setup → rasterization → pixel stream |
+| Initial datapath | Triangle input → setup → rasterization → interpolation → depth test → pixel output |
 | Numeric representation | Signed fixed-point screen coordinates |
 | Control model | Ready/valid streaming with backpressure |
 | Reference behavior | Independent Python model |
@@ -52,16 +53,18 @@ Interpolator
   depth and color attributes
       │
       ▼
-Depth test / framebuffer
-  compare, accept, and store
+Depth test / pixel output
+  compare against depth buffer,
+  emit visible pixel stream
       │
       ▼
 Pixel output
 ```
 
-The first working slice stops after rasterization. That geometry path is now
-integrated in RTL and provides a complete triangle-in, covered-pixel-out
-interface before the state and arithmetic of later stages are added.
+The current beta carries triangles from setup through rasterization,
+interpolation, and depth testing to a ready/valid pixel output. The demo uses a
+64 × 64 depth buffer; it does not include a color framebuffer or a display
+interface.
 
 ### Triangle setup
 
@@ -80,14 +83,42 @@ This deliberately straightforward implementation is useful as a baseline: its
 work is visible, its ordering is deterministic, and its throughput limits can
 be measured before considering parallel coverage lanes or other optimizations.
 
-### Later stages
+### Interpolation and depth
 
-After the geometry path is integrated, the pipeline will evaluate depth and
-color at each covered sample. A depth stage will compare each fragment with the
-stored depth value and control whether the fragment reaches the output.
+For each covered sample, the interpolator calculates depth and RGBA color from
+the triangle's vertex attributes. The depth stage compares that sample against
+the stored value for its pixel and forwards it only when it is nearer.
 
-Those stages are part of the target architecture; the current beta is focused
-on establishing the triangle-to-pixel contract first.
+This is an initial functional implementation. It stops before programmable
+shading, texture sampling, color blending, or writing a complete image to a
+hardware framebuffer.
+
+## RTL-rendered demos
+
+These clips come from accepted pixel outputs of the SystemVerilog simulation.
+Python prepares the triangles for each frame and rebuilds frames from the
+recorded output pixels; triangle coverage, color/depth interpolation, and the
+depth test run in RTL. The satellite's rotation and projection are prepared on
+the host, so the demo does not claim a hardware 3D transform or a hardware
+capture.
+
+| Rotating satellite | Mountain sunset |
+| --- | --- |
+| ![Rotating satellite rendered from RTL pixel output](docs/media/rtl_satellite.gif) | ![Mountain sunset rendered from RTL pixel output](docs/media/rtl_sunset.gif) |
+
+[Satellite MP4](docs/media/rtl_satellite.mp4) · [Sunset MP4](docs/media/rtl_sunset.mp4) · [Three-scene reel](docs/media/rtl_demo_reel.mp4)
+
+To regenerate all three clips on Windows, install Python 3.10 or newer,
+Icarus Verilog, and FFmpeg. Make sure `iverilog`, `vvp`, and `ffmpeg` are on
+`PATH`, then run:
+
+```powershell
+python -m pip install -r requirements-demo.txt
+.\scripts\run_showcase_videos.ps1
+```
+
+The frames, GIF previews, and MP4s are written under
+`results/demo/generated/showcase/`.
 
 ## Design contract
 
@@ -128,9 +159,10 @@ consistent while the pipeline advances normally or waits on a stalled consumer.
 
 ## Verification
 
-The Python model is an independent behavioral specification for the geometry
-rules. It defines expected coverage without reproducing the RTL state machine,
-which gives the hardware an external reference for comparison.
+The Python model is intended to be an independent behavioral specification for
+the geometry rules. The current video harness records RTL output for display;
+it is not a golden-reference comparison. RTL-to-model checking and broader
+self-checking verification remain next.
 
 The verification environment is being developed around:
 
@@ -221,7 +253,7 @@ results/
 1. Freeze the triangle and pixel interface contract.
 2. Verify the integrated triangle-to-pixel RTL slice.
 3. Compare the RTL pixel stream against the independent model.
-4. Add interpolation and depth behavior.
+4. Complete RTL-to-model comparison for interpolation and depth behavior.
 5. Exercise randomized stalls, assertions, and broader regression.
 6. Characterize the baseline across controlled workloads.
 7. Implement one optimization supported by measured evidence.
